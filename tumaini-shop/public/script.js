@@ -31,7 +31,8 @@ const state = {
   banner: null,
   bannerType: 'info',
   loading: false,
-  eventSource: null,
+  pollHandle: null,
+  lastSeenNotificationId: null,
 };
 
 function fmtStatus(s) {
@@ -54,7 +55,7 @@ async function init() {
     try {
       state.session = JSON.parse(saved);
       await apiFetch('/api/auth/me'); // validate token
-      connectEvents();
+      startPolling();
     } catch { state.session = null; localStorage.removeItem('tumaini_session'); }
   }
   await run(loadCatalog);
@@ -62,16 +63,26 @@ async function init() {
 
 async function loadCatalog() { state.catalog = await apiFetch('/api/catalog'); }
 
-function connectEvents() {
-  if (state.eventSource) state.eventSource.close();
-  const es = new EventSource(`/api/events?token=${encodeURIComponent(state.session.token)}`);
-  es.addEventListener('order-delivered', (e) => {
-    const d = JSON.parse(e.data);
-    setBanner(`All staff notified: ${d.kioskName}'s order (#${d.orderId}) has been delivered.`);
-    if (state.dashTab === 'orders') loadOrders().then(render);
-    else render();
-  });
-  state.eventSource = es;
+async function loadOrders() { state.orders = await apiFetch('/api/orders'); }
+
+function startPolling() {
+  stopPolling();
+  state.pollHandle = setInterval(async () => {
+    if (!state.session) return;
+    try {
+      const { last } = await apiFetch('/api/notifications');
+      if (last && last.id !== state.lastSeenNotificationId) {
+        state.lastSeenNotificationId = last.id;
+        setBanner(`All staff notified: ${last.kioskName}'s order (#${last.orderId}) has been delivered.`);
+        if (state.dashTab === 'orders') { await loadOrders(); }
+        render();
+      }
+    } catch { /* a missed poll isn't worth interrupting the user over */ }
+  }, 5000);
+}
+function stopPolling() {
+  if (state.pollHandle) clearInterval(state.pollHandle);
+  state.pollHandle = null;
 }
 
 /* ---------------- Render root ---------------- */
@@ -243,14 +254,14 @@ function attemptLogin() {
       state.loginSelectedId = null;
       state.loginError = '';
       state.dashTab = 'orders';
-      connectEvents();
+      startPolling();
     } catch (e) {
       state.loginError = e.message;
     }
   });
 }
 function logout() {
-  if (state.eventSource) state.eventSource.close();
+  stopPolling();
   state.session = null;
   localStorage.removeItem('tumaini_session');
   state.loginTeamList = [];
