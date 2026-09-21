@@ -1,12 +1,9 @@
 {
-  "name": "tumaini-shop",
+  "name": "tumaini-shop-vercel",
   "version": "1.0.0",
-  "description": "Tumaini Shop kiosk ordering system — backend API + frontend",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
+  "description": "Tumaini Shop — serverless (Vercel) build",
   "dependencies": {
+    "@upstash/redis": "^1.34.3",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "express": "^4.19.2",
